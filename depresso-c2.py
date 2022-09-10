@@ -128,10 +128,3 @@ def c2_server():
         exit()
 
 c2_server()
-
-def example():
-    """_summary_
-    """
-    
-    
-    pass
