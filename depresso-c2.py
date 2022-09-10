@@ -42,8 +42,9 @@ def command_input():
         # Check to see if the user entered download
         if command.lower() == "download":
             # Ask the user for a file name
-            # file_name = input("Enter the file's absolute path> ")
-            file_name = input_validator("Enter the file's absolute path> ")
+            while file_name == "":
+                file_name = input("Enter the file's absolute path> ")
+            # file_name = input_validator("Enter the file's absolute path> ")
     # Return the command and file name
     return command, file_name
 
