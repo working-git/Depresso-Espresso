@@ -54,9 +54,9 @@ def reverse_shell(socket, os_family):
 def base64_decode(data):
     """This function removes the delimter from the encoded data as well as the padding
     Args:
-        data (bytes): The encoded data
+        data (bytearray): The encoded data
     Returns:
-        decoded_data (bytes): The decoded data
+        decoded_data (bytearray): The decoded data
     """
     # Establish the delimiter
     delim = b'!!#@'
@@ -68,9 +68,9 @@ def base64_decode(data):
 def base64_encode(data):
     """This function encodes data in base64 and adds padding to the end of the string if needed, as well as adding a delimiter to the end of the string
     Args:
-        data (_type_:bytes): The data to encode
+        data (bytearray): The data to encode
     Returns:
-        _type_: bytes
+        encoded data (bytearray): Base64 encoded data
     """
     # Establish the delimiter
     delim = b'!!#@'
@@ -98,9 +98,9 @@ def send_file(socket, file_name):
 def receive_data(socket):
     """This function receives the data from the socket and returns it
     Args:
-        socket (_type_): The socket to receive data from
+        socket (Socket.Object): The socket to receive data from
     Returns:
-        _type_: bytes
+        full_data (bytearray): The data received from the socket
     """
     # Create a list to hold the fragments of data, dramatically increases speed
     fragments = []
