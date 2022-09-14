@@ -189,8 +189,9 @@ def main():
         client.close()  # Close the connection
         exit()  # Exit the program
 
-main()
 
+if __name__ == "__main__":
+    main()
 
  # if command.lower() == "shell":
                 #     while True:

